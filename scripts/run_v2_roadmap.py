@@ -62,6 +62,7 @@ def append_summary(section: str) -> None:
 # ── Imports ───────────────────────────────────────────────────────────────────
 from src.backtest.runner import BacktestRunner, _load_ticker_csv
 from src.ingestion.alpha_vantage import EarningsCache
+from src.ingestion.congress import CongressTradeCache
 from src.portfolio import MarkowitzOptimizer, PortfolioConfig
 from src.sentiment.scorer import SentimentScorer, aggregate_daily, smooth_daily_scores
 from src.strategy.signals import SignalGenerator
@@ -72,6 +73,7 @@ PORTFOLIO_TOML = ROOT / "portfolio.toml"
 INITIAL_CASH   = 100_000.0
 CACHE_DIR      = ROOT / "data" / "cache"
 EARNINGS_DIR   = ROOT / "data" / "earnings"
+CONGRESS_DIR   = ROOT / "data" / "congress"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 WINDOWS = [
@@ -135,6 +137,17 @@ def load_earnings_cache() -> EarningsCache | None:
     if not raw:
         return None
     return EarningsCache(raw)
+
+
+def load_congress_cache() -> CongressTradeCache | None:
+    raw: dict[str, list[dict]] = {}
+    for ticker in TICKERS:
+        path = CONGRESS_DIR / f"{ticker}.json"
+        if path.exists():
+            raw[ticker] = json.loads(path.read_text(encoding="utf-8"))
+    if not raw:
+        return None
+    return CongressTradeCache(raw)
 
 
 def signals_df(signals: list) -> pd.DataFrame:
@@ -436,6 +449,66 @@ def stage4() -> None:
     run_stage(4, "Markowitz Mean-Variance Position Sizing", window_results)
 
 
+# ── STAGE 5 ───────────────────────────────────────────────────────────────────
+
+def stage5() -> None:
+    log("\n" + "=" * 64)
+    log("STAGE 5 — Congressional Trading Confirmation")
+    log("=" * 64)
+
+    congress_cache = load_congress_cache()
+    if congress_cache is None:
+        log("  WARNING: No congress data found in data/congress/ — skipping stage 5.")
+        append_summary(
+            "## Stage 5: Congressional Trading Confirmation\n\n"
+            "SKIPPED — no congress data. Run `scripts/fetch_congress_trades.py` "
+            "with a QUIVERQUANT_KEY in `.env` first.\n"
+        )
+        return
+
+    log(f"  Congress cache loaded: {congress_cache}")
+
+    configs = [
+        {"label": "base (no filters)",   "congress": False},
+        {"label": "congress only",        "congress": True},
+    ]
+
+    window_results = []
+    for win in WINDOWS:
+        log(f"\n  {win['label']}")
+        scored  = get_scored(win)
+        daily   = aggregate_daily(scored)
+
+        labels  = []
+        all_m   = []
+        all_cnt = []
+
+        for cfg in configs:
+            gen = SignalGenerator(congress_confirm=cfg["congress"])
+            sigs   = gen.generate(daily, congress_cache=congress_cache)
+            df     = signals_df(sigs)
+            log(f"    Backtest: {cfg['label']} …")
+            m, _   = run_bt(df, win["price_dir"])
+            labels.append(cfg["label"])
+            all_m.append(m)
+            all_cnt.append(count_signals(df))
+
+        table = comparison_table(labels, all_m, all_cnt)
+        log(table)
+
+        delta_ret    = all_m[1]["total_return"] - all_m[0]["total_return"]
+        delta_sharpe = all_m[1]["sharpe_ratio"]  - all_m[0]["sharpe_ratio"]
+        notes = (
+            f"Congressional confirmation vs base: "
+            f"return {_pp(delta_ret)}, Sharpe {delta_sharpe:+.3f}. "
+            f"Filter keyed on disclosure (filing) date — the realistic "
+            f"earliest point a retail trader could have acted on the trade."
+        )
+        window_results.append({"window": win["label"], "table": table, "notes": notes})
+
+    run_stage(5, "Congressional Trading Confirmation", window_results)
+
+
 # ── Final conclusion ──────────────────────────────────────────────────────────
 
 def write_conclusion(stage_outcomes: dict[int, str]) -> None:
@@ -490,6 +563,7 @@ def main() -> None:
         (stage2, 2, "Earnings"),
         (stage3, 3, "Smoothing"),
         (stage4, 4, "Markowitz"),
+        (stage5, 5, "Congress"),
     ]:
         try:
             stage_fn()

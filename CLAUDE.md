@@ -44,7 +44,12 @@ Each module is a single class in its respective file. They are deliberately deco
 
 ### `src/strategy/`
 - `signals.py` — `SignalGenerator.generate()` receives the sentiment DataFrame and returns `[timestamp, ticker, signal]` where `signal ∈ {buy, sell, hold}`.
-- Aggregation logic (time-window, score threshold, per-ticker weighting) is intentionally not yet defined — implement here.
+- Confirmation layers (all opt-in): momentum, earnings surprise, congressional trading disclosure.
+
+### `src/ingestion/congress.py`
+- `QuiverQuantClient.fetch_trades()` pulls STOCK Act disclosure data per ticker from Quiver Quant's free-tier API.
+- `CongressTradeCache.recent_trade_direction()` is keyed on **filing/disclosure date**, not transaction date — the STOCK Act allows up to 45 days of lag between when a member trades and when the public can see it. Backtesting on transaction date would be lookahead bias.
+- Mirrors `EarningsCache`'s shape so it plugs into `SignalGenerator` as a fourth confirmation layer (`congress_confirm=True`).
 
 ### `src/backtest/`
 - `runner.py` — `BacktestRunner.run()` takes a signals DataFrame and replays it against OHLCV CSV data stored under `data/`.

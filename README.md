@@ -17,6 +17,7 @@ Copy `.env.example` to `.env` and fill in your credentials:
 | `NEWSAPI_KEY` | [newsapi.org](https://newsapi.org) — free tier gives 100 req/day |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) — create a "script" app |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | [app.alpaca.markets](https://app.alpaca.markets) — Paper Trading dashboard |
+| `QUIVERQUANT_KEY` | [quiverquant.com](https://www.quiverquant.com) — free tier, congressional trading disclosures |
 
 ```bash
 cp .env.example .env

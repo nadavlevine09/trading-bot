@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 from src.ingestion.alpha_vantage import EarningsCache
+from src.ingestion.congress import CongressTradeCache
 from src.portfolio.models import Signal
 from src.strategy.signals import SignalGenerator, _date_to_datetime
 
@@ -560,6 +561,201 @@ class TestEarningsConfirmation:
             as_of=AS_OF,
             price_history=_above_ma_history(),
             earnings_cache=_earnings_cache(surprise_pct=-10.0),
+        )
+        assert result[0].action == "hold"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Congressional trading confirmation
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Signal date from the default _df() helper is 2025-01-10.
+
+def _congress_cache(
+    direction: float,
+    report_date: date = date(2025, 1, 8),  # 2 days before signal date
+    transaction: str | None = None,
+) -> CongressTradeCache:
+    if transaction is None:
+        transaction = "Purchase" if direction > 0 else "Sale"
+    raw = {"AAPL": [{
+        "report_date": report_date.isoformat(),
+        "transaction": transaction,
+    }]}
+    return CongressTradeCache(raw)
+
+
+class TestCongressConfirmation:
+    """Tests for the congress_confirm flag on SignalGenerator."""
+
+    # ── Flag is off by default ─────────────────────────────────────────────────
+
+    def test_congress_off_by_default(self):
+        assert SignalGenerator().congress_confirm is False
+
+    def test_congress_off_ignores_cache(self):
+        gen = SignalGenerator(congress_confirm=False, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=-1.0),  # would disagree
+        )
+        assert result[0].action == "buy"
+
+    # ── No recent disclosure → signal passes through unchanged ─────────────────
+
+    def test_no_recent_disclosure_buy_passes(self):
+        # Filed 30 days before signal — outside lookback window
+        cache = _congress_cache(direction=-1.0, report_date=date(2024, 12, 1))
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=cache,
+        )
+        assert result[0].action == "buy"
+
+    def test_no_recent_disclosure_sell_passes(self):
+        cache = _congress_cache(direction=1.0, report_date=date(2024, 12, 1))
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": -0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=cache,
+        )
+        assert result[0].action == "sell"
+
+    # ── Sentiment and congressional trades agree → signal passes ───────────────
+
+    def test_buy_confirmed_by_congressional_purchase(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=1.0),
+        )
+        assert result[0].action == "buy"
+
+    def test_sell_confirmed_by_congressional_sale(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": -0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=-1.0),
+        )
+        assert result[0].action == "sell"
+
+    # ── Sentiment and congressional trades disagree → downgraded to hold ───────
+
+    def test_buy_downgraded_by_congressional_sale(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=-1.0),
+        )
+        assert result[0].action == "hold"
+
+    def test_sell_downgraded_by_congressional_purchase(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": -0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=1.0),
+        )
+        assert result[0].action == "hold"
+
+    # ── Mixed disclosures in window cancel toward zero ──────────────────────────
+
+    def test_mixed_disclosures_average_toward_zero_downgrades_buy(self):
+        # One purchase + one sale in the window net to 0.0 direction.
+        # With a non-zero threshold, that no longer counts as confirming.
+        raw = {"AAPL": [
+            {"report_date": "2025-01-08", "transaction": "Purchase"},
+            {"report_date": "2025-01-09", "transaction": "Sale"},
+        ]}
+        cache = CongressTradeCache(raw)
+        gen = SignalGenerator(
+            congress_confirm=True, min_headlines=3, congress_threshold=0.5
+        )
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=cache,
+        )
+        assert result[0].action == "hold"
+
+    # ── congress_cache=None skips the filter ────────────────────────────────────
+
+    def test_congress_on_but_no_cache_skips_filter(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=None,
+        )
+        assert result[0].action == "buy"
+
+    # ── Hold signals never touched ────────────────────────────────────────────
+
+    def test_hold_never_affected_by_congress(self):
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.1, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=_congress_cache(direction=-1.0),
+        )
+        assert result[0].action == "hold"
+
+    # ── Congress lookback boundary ──────────────────────────────────────────────
+
+    def test_congress_exactly_at_lookback_boundary_applies(self):
+        # Default lookback = 14 days. Filing on day D-14 should apply.
+        report_date = date(2025, 1, 10) - timedelta(days=14)
+        cache = _congress_cache(direction=-1.0, report_date=report_date)
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=cache,
+        )
+        assert result[0].action == "hold"
+
+    def test_congress_just_outside_lookback_is_neutral(self):
+        # Filed 15 days before signal — outside default 14-day window
+        report_date = date(2025, 1, 10) - timedelta(days=15)
+        cache = _congress_cache(direction=-1.0, report_date=report_date)
+        gen = SignalGenerator(congress_confirm=True, min_headlines=3)
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            congress_cache=cache,
+        )
+        assert result[0].action == "buy"
+
+    # ── Combined: momentum + congress ───────────────────────────────────────────
+
+    def test_both_filters_must_agree_for_buy_to_pass(self):
+        gen = SignalGenerator(
+            momentum_confirm=True, congress_confirm=True, min_headlines=3
+        )
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            price_history=_above_ma_history(),
+            congress_cache=_congress_cache(direction=1.0),
+        )
+        assert result[0].action == "buy"
+
+    def test_congress_disagree_overrides_momentum_agreement(self):
+        gen = SignalGenerator(
+            momentum_confirm=True, congress_confirm=True, min_headlines=3
+        )
+        result = gen.generate(
+            _df({"sentiment_score": 0.5, "n_headlines": 5}),
+            as_of=AS_OF,
+            price_history=_above_ma_history(),
+            congress_cache=_congress_cache(direction=-1.0),
         )
         assert result[0].action == "hold"
 

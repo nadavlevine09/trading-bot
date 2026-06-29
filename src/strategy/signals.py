@@ -11,6 +11,7 @@ from src.portfolio.models import Signal
 
 if TYPE_CHECKING:
     from src.ingestion.alpha_vantage import EarningsCache
+    from src.ingestion.congress import CongressTradeCache
 
 _log = logging.getLogger(__name__)
 
@@ -20,6 +21,8 @@ _MIN_HEADLINES =  8
 _MA_WINDOW     = 10
 _EARNINGS_LOOKBACK = 7    # days to look back for a recent earnings report
 _EARNINGS_THRESHOLD = 0.0 # min absolute surprise % to count as a signal; 0 = any beats/miss
+_CONGRESS_LOOKBACK = 14   # days to look back for a recent congressional disclosure
+_CONGRESS_THRESHOLD = 0.0 # min absolute net direction to count as confirming; 0 = any net lean
 
 
 class SignalGenerator:
@@ -40,6 +43,14 @@ class SignalGenerator:
          SELL requires a negative surprise; neutral/contradictory surprises
          downgrade to hold.  When no recent earnings exist the signal passes
          through unchanged (the filter is irrelevant that day).
+      4. Congressional trading filter (``congress_confirm=True``): only active
+         when a STOCK Act disclosure for the ticker was filed within the last
+         ``congress_lookback`` days. Keyed on disclosure (filing) date, not
+         transaction date, since that's the earliest point the trade is
+         actually public. A BUY requires net congressional buying and a SELL
+         requires net congressional selling over that window; disagreement
+         downgrades to hold. No recent disclosure → signal passes through
+         unchanged.
 
     Boundary values (score == threshold) always yield ``hold``.
     """
@@ -54,6 +65,9 @@ class SignalGenerator:
         earnings_confirm: bool = False,
         earnings_lookback: int = _EARNINGS_LOOKBACK,
         earnings_threshold: float = _EARNINGS_THRESHOLD,
+        congress_confirm: bool = False,
+        congress_lookback: int = _CONGRESS_LOOKBACK,
+        congress_threshold: float = _CONGRESS_THRESHOLD,
     ) -> None:
         if buy_threshold <= sell_threshold:
             raise ValueError(
@@ -66,6 +80,8 @@ class SignalGenerator:
             raise ValueError(f"ma_window must be >= 1, got {ma_window}")
         if earnings_lookback < 0:
             raise ValueError(f"earnings_lookback must be >= 0, got {earnings_lookback}")
+        if congress_lookback < 0:
+            raise ValueError(f"congress_lookback must be >= 0, got {congress_lookback}")
 
         self.buy_threshold        = buy_threshold
         self.sell_threshold       = sell_threshold
@@ -75,6 +91,9 @@ class SignalGenerator:
         self.earnings_confirm     = earnings_confirm
         self.earnings_lookback    = earnings_lookback
         self.earnings_threshold   = earnings_threshold
+        self.congress_confirm     = congress_confirm
+        self.congress_lookback    = congress_lookback
+        self.congress_threshold   = congress_threshold
 
     # ── Core classification ────────────────────────────────────────────────────
 
@@ -112,6 +131,7 @@ class SignalGenerator:
         as_of: datetime | None = None,
         price_history: dict[str, pd.DataFrame] | None = None,
         earnings_cache: "EarningsCache | None" = None,
+        congress_cache: "CongressTradeCache | None" = None,
     ) -> list[Signal]:
         """
         Generate one Signal per row of a daily aggregated scores DataFrame.
@@ -134,6 +154,10 @@ class SignalGenerator:
             earnings_cache: ``EarningsCache`` built from Alpha Vantage data.
                             Consulted when ``earnings_confirm=True``; pass
                             ``None`` to skip even when the flag is on.
+            congress_cache: ``CongressTradeCache`` built from Quiver Quant
+                            disclosure data. Consulted when
+                            ``congress_confirm=True``; pass ``None`` to skip
+                            even when the flag is on.
 
         Returns:
             List of ``Signal`` objects ready to pass to
@@ -168,6 +192,16 @@ class SignalGenerator:
             ):
                 action = self._apply_earnings_filter(
                     ticker, row["date"], action, earnings_cache
+                )
+
+            # Layer 4: congressional trading confirmation (only active near disclosures)
+            if (
+                self.congress_confirm
+                and congress_cache is not None
+                and action in ("buy", "sell")
+            ):
+                action = self._apply_congress_filter(
+                    ticker, row["date"], action, congress_cache
                 )
 
             signals.append(Signal(timestamp=ts, ticker=ticker, action=action))
@@ -214,6 +248,48 @@ class SignalGenerator:
         _log.debug(
             "%s: earnings surprise %.2f%% disagrees with %s — downgraded to hold",
             ticker, surprise, action,
+        )
+        return "hold"
+
+    # ── Congressional trading confirmation ────────────────────────────────────
+
+    def _apply_congress_filter(
+        self,
+        ticker: str,
+        signal_date: Any,
+        action: str,
+        congress_cache: "CongressTradeCache",
+    ) -> str:
+        """
+        Apply congressional-disclosure gate for BUY/SELL signals.
+
+        Only active when a STOCK Act disclosure for the ticker was filed
+        within ``congress_lookback`` days. When no recent disclosure exists,
+        the signal passes through unchanged (filter is neutral).
+
+        If a disclosure IS found (net direction over the window):
+          • BUY  + net direction ≥ threshold   → passes
+          • SELL + net direction ≤ -threshold  → passes
+          • Any other combination               → downgraded to hold
+        """
+        sig_date = _to_date(signal_date)
+        direction = congress_cache.recent_trade_direction(
+            ticker, sig_date, lookback_days=self.congress_lookback
+        )
+
+        if direction is None:
+            # No recent disclosure → filter not applicable; let signal through
+            return action
+
+        threshold = abs(self.congress_threshold)
+        if action == "buy" and direction >= threshold:
+            return action
+        if action == "sell" and direction <= -threshold:
+            return action
+
+        _log.debug(
+            "%s: congressional net direction %.2f disagrees with %s — downgraded to hold",
+            ticker, direction, action,
         )
         return "hold"
 
