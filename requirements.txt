@@ -1,0 +1,34 @@
+# HTTP / API
+requests>=2.31.0
+praw>=7.7.1          # Reddit API
+
+# Data
+pandas>=2.1.0
+numpy>=1.26.0,<2.0.0   # torch 2.2.x compiled against NumPy 1.x
+
+# NLP / Sentiment
+transformers>=4.40.0,<4.47.0  # 4.47+ blocks torch<2.6 (CVE-2025-32434); torch 2.6 unavailable on Python 3.12 macOS
+torch>=2.2.0
+
+# Alpaca paper trading
+alpaca-py>=0.20.0
+
+# Config
+python-dotenv>=1.0.0
+
+# Google Cloud (BigQuery for GDELT GKG queries)
+google-cloud-bigquery>=3.13.0
+
+# NLP / NER (relevance filter)
+spacy>=3.8.0
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+# Optimisation (must stay <1.14 to remain compatible with numpy<2 required by torch)
+scipy>=1.11.0,<1.14.0
+
+# Parquet I/O
+pyarrow>=14.0.0
+
+# Testing
+pytest>=8.0.0
+pytest-mock>=3.12.0

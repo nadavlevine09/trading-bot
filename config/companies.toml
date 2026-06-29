@@ -1,0 +1,160 @@
+# Company reference table for the news-sentiment trading bot.
+# Loader: src/config/companies.py  →  CompanyInfo dataclass
+#
+# Fields
+# ──────
+# company_name             Primary name used in NER matching and NewsAPI queries.
+# aliases                  Alternate legal / brand names (e.g. Alphabet for GOOGL).
+#                          Included in query expansion; checked in relevance filter.
+# subsidiaries             Distinct subsidiary / product brands that generate standalone
+#                          headlines without naming the parent company (e.g. "Xbox").
+#                          Used for query expansion and relevance filter (title-only).
+# associated_people        Named individuals whose statements materially move this stock.
+#                          Intended for future sentiment attribution / signal weighting.
+# finance_source_whitelist Sources consistently treated as high-confidence financial
+#                          reporting.  Used to up-weight or trust-gate signals.
+#                          Optional — omit or leave empty to skip.
+
+[AAPL]
+company_name       = "Apple"
+legal_entity_name  = "Apple Inc"
+aliases            = ["Apple Inc.", "Apple Inc"]
+subsidiaries  = ["Beats"]
+associated_people = ["Tim Cook"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "9to5Mac",
+  "MacRumors",
+]
+
+[NVDA]
+company_name       = "Nvidia"
+legal_entity_name  = "NVIDIA Corp"
+aliases            = ["NVIDIA", "NVIDIA Corporation"]
+subsidiaries  = ["Mellanox", "GeForce"]
+associated_people = ["Jensen Huang"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "Tom's Hardware",
+]
+
+[TSLA]
+company_name       = "Tesla"
+legal_entity_name  = "Tesla Inc"
+aliases            = ["Tesla, Inc.", "Tesla Motors"]
+subsidiaries  = ["SolarCity", "Tesla Energy", "Powerwall", "Megapack", "Optimus"]
+associated_people = ["Elon Musk", "Robyn Denholm"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "Electrek",
+  "InsideEVs",
+]
+
+[MSFT]
+company_name       = "Microsoft"
+legal_entity_name  = "Microsoft Corp"
+aliases            = ["Microsoft Corporation"]
+subsidiaries  = ["Xbox", "Azure", "LinkedIn", "GitHub", "Activision Blizzard", "Activision"]
+associated_people = ["Satya Nadella", "Bill Gates"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "The Verge",
+  "Ars Technica",
+]
+
+[AMZN]
+company_name       = "Amazon"
+legal_entity_name  = "Amazon"
+aliases            = ["Amazon.com", "Amazon.com Inc.", "Amazon.com, Inc."]
+# "Prime" intentionally excluded — too generic (matches "Prime Minister" etc.)
+subsidiaries  = ["AWS", "Whole Foods", "Ring", "Twitch", "Audible", "MGM", "Zappos"]
+associated_people = ["Andy Jassy", "Jeff Bezos"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "GeekWire",
+]
+
+[GOOGL]
+company_name       = "Google"
+legal_entity_name  = "Alphabet Inc"
+# Alphabet is the legal parent; both names appear in headlines
+aliases            = ["Alphabet", "Alphabet Inc.", "Google LLC"]
+subsidiaries  = ["YouTube", "DeepMind", "Waymo", "Verily", "Google Cloud", "Fitbit", "Waze"]
+associated_people = ["Sundar Pichai", "Larry Page", "Sergey Brin", "Ruth Porat"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "The Verge",
+  "9to5Google",
+]
+
+[META]
+company_name       = "Meta"
+legal_entity_name  = "Meta Platforms Inc"
+# Facebook is both a former company name and an active subsidiary brand
+aliases            = ["Meta Platforms", "Meta Platforms Inc.", "Facebook"]
+subsidiaries  = ["Facebook", "Instagram", "WhatsApp", "Oculus", "Threads", "Quest"]
+associated_people = ["Mark Zuckerberg", "Sheryl Sandberg"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "TechCrunch",
+]
+
+[AMD]
+company_name       = "AMD"
+legal_entity_name  = "AMD"
+aliases            = ["Advanced Micro Devices", "Advanced Micro Devices Inc.", "Advanced Micro Devices, Inc."]
+subsidiaries  = ["Xilinx", "Radeon", "EPYC", "Ryzen"]
+associated_people = ["Lisa Su"]
+finance_source_whitelist = [
+  "Bloomberg",
+  "Reuters",
+  "The Wall Street Journal",
+  "Financial Times",
+  "CNBC",
+  "Barron's",
+  "MarketWatch",
+  "Tom's Hardware",
+  "AnandTech",
+]

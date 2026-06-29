@@ -1,0 +1,41 @@
+[portfolio]
+# ── Position sizing ────────────────────────────────────────────────────────────
+max_position_pct        = 0.10   # max 10 % of portfolio per position
+cash_buffer_pct         = 0.05   # keep 5 % uninvested at all times
+max_positions           = 20
+volatility_window       = 20     # days of history for rolling return std
+volatility_target       = 0.02   # target 2 % daily vol per position
+
+# ── Concentration risk ─────────────────────────────────────────────────────────
+max_sector_pct          = 0.30   # no sector > 30 % of portfolio
+
+# ── Drawdown protection ────────────────────────────────────────────────────────
+circuit_breaker_pct     = 0.10   # halt buys if portfolio is 10 % below peak
+trailing_stop_pct       = 0.08   # sell if position drops 8 % from its peak price
+take_profit_pct         = 0.18   # sell if unrealized gain exceeds 18 % vs entry price
+
+# ── Rebalancing ────────────────────────────────────────────────────────────────
+at_capacity_action      = "skip"     # "skip" | "queue" | "sell_weakest"
+signal_queue_maxsize    = 50
+rebalance_interval_days = 7
+
+# ── Liquidity / costs ──────────────────────────────────────────────────────────
+min_avg_daily_volume    = 500_000   # skip tickers with ADV below this
+slippage_bps            = 10.0      # 10 bps per-side slippage in backtest
+
+# ── Sector map (ticker → sector) ──────────────────────────────────────────────
+[portfolio.sector_map]
+AAPL  = "technology"
+MSFT  = "technology"
+GOOGL = "technology"
+META  = "technology"
+NVDA  = "technology"
+AMZN  = "consumer_discretionary"
+TSLA  = "consumer_discretionary"
+JPM   = "financials"
+GS    = "financials"
+BAC   = "financials"
+XOM   = "energy"
+CVX   = "energy"
+JNJ   = "healthcare"
+UNH   = "healthcare"

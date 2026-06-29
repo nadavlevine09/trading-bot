@@ -1,0 +1,32 @@
+# Secrets and credentials — never commit
+.env
+credentials/
+
+# Historical / fetched data — only .gitkeep is tracked
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Test cache
+.pytest_cache/
+
+# HuggingFace model cache (large binaries)
+.cache/
+
+# Generated log/session files
+logs/
+session_export*.md
+
+# Claude Code local settings
+.claude/
+
+# macOS
+.DS_Store
