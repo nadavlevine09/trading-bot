@@ -1,5 +1,11 @@
 # News-Sentiment Trading Bot
 
+- **What it does:** reads daily news about eight large-cap stocks, scores each headline with FinBERT, and turns strong positive or negative sentiment into paper trades through Alpaca, with risk limits on every trade.
+- **Backtest 1 (Dec 2025 – Mar 2026):** −0.91% over 7 trades, every one a loss.
+- **Backtest 2 (Mar – Jun 2026):** +4.28% over 23 trades, 70% win rate. Same code, same settings.
+- **What I learned:** one backtest proves almost nothing. The gap came from market conditions, and every feature I added (momentum confirmation, earnings data, portfolio optimization) helped in one kind of market and hurt in the other.
+- **Also:** news data quality matters as much as the model. Full write-up in [WRITEUP.md](WRITEUP.md).
+
 A Python 3.11+ paper-trading bot that scores financial news headlines with FinBERT and converts aggregated sentiment into buy/sell signals executed via Alpaca's paper-trading API.
 
 ## Setup
@@ -44,7 +50,7 @@ tests/              unit tests mirroring src/ layout
 
 ## Notes
 
-- All classes in `src/` have `raise NotImplementedError` stubs — implement them module by module.
+- Note: the Reddit source (src/ingestion/reddit.py) isn't implemented yet; the bot runs on the news sources.
 - The FinBERT model (`ProsusAI/finbert`) downloads ~420 MB on first use via `transformers`.
 - Alpaca is configured for **paper trading** (`paper=True`). Do not switch to live without explicit intent.
 - NewsAPI free tier enforces a 30-day historical lookback; plan backtest data collection accordingly.
